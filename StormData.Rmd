@@ -1,35 +1,43 @@
-## Severe weather events and related economic consequences across USA
-
+##Title: Severe weather events and related economic consequences across USA
 
 
 ## Synopsis
-Several weather events can case loss of life, injuries, significant property damage, and/or disruption to commerce. This report using NOAA Storm Data to summarize the top 10 harmful events related to population health and economic consequences due to the events.
+Severe weather events can case loss of life, injuries, significant property damage, and/or disruption to commerce. This report using NOAA Storm Data to summarize the top 10 harmful events related to population health and economic consequences due to the events.
 
 
 ## Data Processing
 ### Loading the data
 The data was loaded from the [file repository](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2) in the Reproducibal Research Coursera Course. The data was in the form of a comma-separated-value file compressed via the bzip2 algorithm.
 
-```{r loading data, echo=TRUE, cache = TRUE}
-setInternet2(TRUE)
-temp <- tempfile()
-download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2", temp) 
-StormData <- read.csv(temp, stringsAsFactor = FALSE)
-unlink(temp)
+
+```{r loading data, echo=TRUE}
+setwd("H:/Education/R/Project/StormData")
+options(scipen = 999)  
+library(knitr)
+library(stringr)
+StormData <- read.csv("repdata_data_StormData.csv.bz2", stringsAsFactor = FALSE)
 ```
 
-The file was downloaded, extracted and then read into a data frame named as StormData uisng the above codes.
+
+The file was downloaded, extracted and then read into a data frame named as StormData using the above codes.
 
 ### Clean the data 
-Event Type: All values are transformed into captial value and trimmed the leading and trailing whitespace.
+Event Type: All values are transformed into capital value and trimmed the leading and trailing whitespace.
+
+
 Begin Date: remove the time zero and format to date type
+
+
 Year of event: generate the year of event from begin date
+
+
 Health Issues: generate the health problems due to the events, including injuries and fatalities. 
+
+
 Cost: sum the property damage and crop damage DMG with EXP.
 
 
 ```{r, echo = TRUE}
-library(stirngr)
 StormData$EVTYPE <- toupper(str_trim(StormData$EVTYPE))
 
 StormData$BGN_DATE <- gsub(" 0:00:00", "", StormData$BGN_DATE)
@@ -54,20 +62,74 @@ exp_transform <- function(e) {
 } 
 StormData$ProductCost <- StormData$PROPDMG * 10 ** sapply(StormData$PROPDMGEXP, FUN = exp_transform)
 StormData$CropCost <- StormData$CROPDMG * 10 ** sapply(StormData$CROPDMGEXP, FUN = exp_transform)
-StormData$ProductCost <- format(StormData$ProductCost, scientific = FALSE)
-StormData$CropCost <- format(StormData$CropCost, scientific = FALSE)
 StormData$Cost <- with(StormData, ProductCost + CropCost)
 ```
 
 ### Limit the year of data analysis
+
+
 Due to a lack of good records in the earlier years, some records were removed to keep the record consistency. A bar chart was created to find the start year for the data analysis.
 From the chart, it looks like an steady increase in events since 1995. We limited data for analysis since 1995.
 
+
 ```{r, echo = TRUE}
-RecordsByYear <- data.frame(table(StormData$YearEvent))
-plot(RecordsByYear$Var1, RecordsByYear$Freq, xlab = "Year", ylab = "Total Events", 
-     main = "Number of storm events by year", type = "l")
+RecordsByYear <- data.frame(with(StormData, table(YearEvent)))
+RecordsByYear$YearEvent <- as.numeric(RecordsByYear$YearEvent) + 1949
+cols <- c("blue", "red")[(RecordsByYear$YearEvent >= 1995) + 1]
+par(las = 3)
+barplot(RecordsByYear$Freq, names.arg = RecordsByYear$YearEvent, 
+    xlab = "Year", ylab = "Total Events",
+    main = "Number of Storm Events by Year", 
+    axis.lty = 1, col = cols, cex.names = 0.6)
 SubsetData <- subset(StormData, StormData$YearEvent >= 1995)
 ```
 
+### Result
+1. Most harmful events with respect to population health
+
+
+Aggregate the subset data to produce the top 10 events related to causality.
+
+
+
+```{r, echo = TRUE}
+EventsPop <- aggregate(HealthEvent~EVTYPE, data = SubsetData, FUN = "sum")
+EventsPop <- EventsPop[order(-EventsPop$HealthEvent),][1:10,]
+kable(EventsPop, format = "html", row.names = FALSE, 
+      col.names = c("Event Type", "Causality"),
+      caption = "Top 10 Most Harmful Events with Respect to Population Health")
+par(las = 3)
+par(mar = c(8, 4, 4, 2))
+barplot(EventsPop$HealthEvent, names.arg = EventsPop$EVTYPE,
+        ylab = "Causality", cex.name = 0.6,
+        main = "Top 10 Most Harmful Events with Respect to Population Health")
+```
+
+
+From the table and plot, we can see tornado caused the highest causality, followed by excessive heat, flood, lightning, tstm wind, heat, flash flood, thunderstrom wind, winter storm and hurricane/typhoon.
+
+
+2. Events with greatest economic consequences
+
+
+Aggregate the subset dataset to produce the top 10 events with greatest economic consequences.
+
+
+```{r, echo = TRUE}
+EventsCost <- aggregate(Cost~EVTYPE, data = SubsetData, FUN = "sum")
+EventsCost <- EventsCost[order(-EventsCost$Cost),][1:10,]
+kable(EventsCost, format = "html", row.names = FALSE, 
+      col.names = c("Event Type", "Cost"))
+par(las = 3)
+par(mar = c(8, 4, 4, 2))
+barplot(EventsCost$Cost * 10 ** -6, names.arg = EventsCost$EVTYPE,
+        ylab = "Costs (Millions)", cex.names = 0.6,
+        main = "Top 10 Events with the Greatest Economic Consequences")
+```
+
+
+From the table and plot, we can see flood caused the highest economic consequences, followed by hurricane/typhoon, storm surge, tornado, hail, flash food, hurricane, tropical storm and high wind.
+
+
+Due to the limit time, events needs to be regrouped due to non-standarized data items.
 
